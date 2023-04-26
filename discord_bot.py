@@ -38,21 +38,26 @@ offlines_bot_channel_id = (
 async def offlinequeue(ctx):
     user_id = ctx.author.id
     username = ctx.author.name
+    #username = ctx.author.name + '#' + ctx.author.discrimminator This will be the users full username, eg 'test#1000' instead of just 'test' this allows for people with the same name to join the tourney.
 
     # check if the user is already in the database
     cursor.execute("SELECT * FROM offlineuserqueue WHERE user_id=?", (user_id,))
     result = cursor.fetchone()
     if result:
-        await ctx.send(
+        await ctx.respond(
             f"{ctx.author.mention}, you are already in the offline user queue!"
         )
         return
 
     # add the user to the database
-    cursor.execute("INSERT INTO offlineuserqueue VALUES (?, ?)", (user_id, username))
+    cursor.execute("INSERT INTO offlineuserqueue VALUES (?, ?)", (user_id, username)) 
+    #Users can change their username so storing it could be dangerous. Just store the user by their id instead 
+    #if you want to return a user model use: 
+    #user = discord.utils.get(discord.utils.get(bot.guilds, id = main_discord_id).members, id = user_id)
+    # from there you can use (user.name + '#' + user.discrimminator) to return their username
     connection.commit()
 
-    await ctx.send(
+    await ctx.respond(
         f"{ctx.author.mention}, you have been added to the offline user queue!"
     )
 
@@ -64,16 +69,16 @@ async def winner(ctx):
     cursor.execute("SELECT * FROM offlineuserqueue ORDER BY user_id")
     result = cursor.fetchone()
     if not result:
-        await ctx.send("The offline user queue is empty!")
+        await ctx.respond("The offline user queue is empty!")
         return
 
     # ping the winner and send a message to the offlines-bot channel
     winner_id, winner_name = result
     member = ctx.guild.get_member(winner_id)
     if member:
-        await ctx.send(f"{member.mention}, you're up!")
+        await ctx.respond(f"{member.mention}, you're up!")
         offlines_bot_channel = bot.get_channel(offlines_bot_channel_id)
-        await offlines_bot_channel.send("you're up in lobby!")
+        await offlines_bot_channel.respond("you're up in lobby!")
 
     # remove the winner from the queue
     cursor.execute("DELETE FROM offlineuserqueue WHERE user_id=?", (winner_id,))
@@ -84,7 +89,7 @@ async def winner(ctx):
 @bot.slash_command(name="help", description="List all available commands")
 async def list_commands(ctx):
     command_list = "\n".join([f"/{c.name}" for c in bot.commands])
-    await ctx.send(f"Here are the available commands:\n{command_list}")
+    await ctx.respond(embed = discord.Embed(title="Help", description=f"Here are the available commands:\n{command_list}", color = discord.Color.white()))
 
 
 # run the bot
