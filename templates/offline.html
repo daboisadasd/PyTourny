@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-md-6">
+      <h2>Current Queue</h2>
+      <ul>
+        {% for offline_user in offline_users %}
+          <li>{{ offline_user.name }}</li>
+        {% empty %}
+          <li>No users in queue</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="col-md-6">
+      <h2>Current Winners</h2>
+      <ul>
+        {% for offline_winner in offline_winners %}
+          <li>{{ offline_winner.user.name }} ({{ offline_winner.wins }} wins)</li>
+        {% empty %}
+          <li>No winners yet</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endblock %}
