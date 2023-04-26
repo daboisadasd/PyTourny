@@ -4,7 +4,7 @@ from keys import bot_token
 from discord.ext import commands
 
 # create a connection to the SQLite database
-connection = sqlite3.connect("offline_users.db")
+connection = sqlite3.connect("db.sqlite3")
 cursor = connection.cursor()
 
 # create the offlineuser, offlinewinners, and offlineuserqueue tables if they don't exist
