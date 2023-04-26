@@ -1,24 +1,7 @@
-import logging
 import sqlite3
-import discord
-from discord.ext import commands, tasks
-import keys
-import os
-import sys
-import django
-from django.template.loader import render_to_string
-from django.conf import settings
-from offline_raids_info_app.models import OfflineUsers, OfflineWinners, OfflineUserQueue
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# set up the Django environment
-sys.path.append(BASE_DIR)
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "offline_raids_info.settings")
-django.setup()
-
-# import models
-
+import logging
+from keys import bot_token
+from discord.ext import commands
 
 # create a connection to the SQLite database
 connection = sqlite3.connect("offline_users.db")
@@ -39,122 +22,70 @@ cursor.execute(
 )
 
 # create a logging instance and add a handler that prints all logs at the INFO level and above to the console
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 logging.getLogger("").addHandler(console_handler)
 
-bot = commands.Bot(command_prefix="!")
+bot = commands.Bot(command_prefix="/")
 offlines_bot_channel_id = (
     1099368104712220713  # replace with the actual ID of the offlines-bot channel
 )
 
 
-@bot.command()
-async def offlinejoin(ctx):
-    user_id = ctx.author.id
-    username = ctx.author.name
-
-    # check if the user is already in the database
-    if OfflineUsers.objects.filter(user_id=user_id).exists():
-        await ctx.send(
-            f"{ctx.author.mention}, you are already in the offline user list!"
-        )
-        return
-
-    # add the user to the database
-    OfflineUsers.objects.create(user_id=user_id, username=username)
-
-    await ctx.send(
-        f"{ctx.author.mention}, you have been added to the offline user list!"
-    )
-
-
-@bot.command()
-async def offlinewinner(ctx):
-    user_id = ctx.author.id
-    username = ctx.author.name
-
-    # check if the user is already in the database
-    winner = OfflineWinners.objects.filter(user_id=user_id).first()
-    if winner:
-        # increment the win_count field
-        winner.win_count += 1
-        winner.save()
-        await ctx.send(f"{ctx.author.mention}, you have won {winner.win_count} times!")
-        return
-
-    # add the user to the database
-    OfflineWinners.objects.create(user_id=user_id, username=username, win_count=1)
-
-    await ctx.send(
-        f"{ctx.author.mention}, you have been added to the offline winners list!"
-    )
-
-
-@bot.command()
+# command to add a user to the offline user queue
+@bot.slash_command(description="Add a user to the offline user queue")
 async def offlinequeue(ctx):
     user_id = ctx.author.id
     username = ctx.author.name
 
     # check if the user is already in the database
-    if OfflineUserQueue.objects.filter(user_id=user_id).exists():
+    cursor.execute("SELECT * FROM offlineuserqueue WHERE user_id=?", (user_id,))
+    result = cursor.fetchone()
+    if result:
         await ctx.send(
             f"{ctx.author.mention}, you are already in the offline user queue!"
         )
         return
 
     # add the user to the database
-    OfflineUserQueue.objects.create(user_id=user_id, username=username)
+    cursor.execute("INSERT INTO offlineuserqueue VALUES (?, ?)", (user_id, username))
+    connection.commit()
 
     await ctx.send(
         f"{ctx.author.mention}, you have been added to the offline user queue!"
     )
 
 
-@bot.command()
+# command to pick a winner from the offline user queue
+@bot.slash_command(description="Pick a winner from the offline user queue")
 async def winner(ctx):
     # get the first user in the queue
-    winner = OfflineUserQueue.objects.order_by("user_id").first()
-
-    if not winner:
+    cursor.execute("SELECT * FROM offlineuserqueue ORDER BY user_id")
+    result = cursor.fetchone()
+    if not result:
         await ctx.send("The offline user queue is empty!")
         return
 
     # ping the winner and send a message to the offlines-bot channel
-    member = ctx.guild.get_member(winner.user_id)
+    winner_id, winner_name = result
+    member = ctx.guild.get_member(winner_id)
     if member:
         await ctx.send(f"{member.mention}, you're up!")
         offlines_bot_channel = bot.get_channel(offlines_bot_channel_id)
         await offlines_bot_channel.send("you're up in lobby!")
 
     # remove the winner from the queue
-    winner.delete()
-
-    # update the website
-    offline_winners = OfflineWinners.objects.order_by("-win_count")
-    offline_user_queue = list(OfflineUserQueue.objects.all())
-    context = {
-        "offline_winners": offline_winners,
-        "offline_user_queue": offline_user_queue,
-    }
-    html = render_to_string("offline_raids_info_app/index.html", context)
-    with open(os.path.join(BASE_DIR, "static/index.html"), "w") as f:
-        f.write(html)
+    cursor.execute("DELETE FROM offlineuserqueue WHERE user_id=?", (winner_id,))
+    connection.commit()
 
 
-@tasks.loop(seconds=5)
-async def update_website():
-    # update the website
-    offline_winners = OfflineWinners.objects.order_by("-win_count")
-    offline_user_queue = list(OfflineUserQueue.objects.all())
-    context = {
-        "offline_winners": offline_winners,
-        "offline_user_queue": offline_user_queue,
-    }
-    html = render_to_string("offline_raids_info_app/index.html", context)
-    with open(os.path.join(BASE_DIR, "static/index.html"), "w") as f:
-        f.write(html)
+# command to list all available commands
+@bot.slash_command(name="help", description="List all available commands")
+async def list_commands(ctx):
+    command_list = "\n".join([f"/{c.name}" for c in bot.commands])
+    await ctx.send(f"Here are the available commands:\n{command_list}")
 
 
-bot.run(keys.bot_token)
+# run the bot
+bot.run(bot_token)
